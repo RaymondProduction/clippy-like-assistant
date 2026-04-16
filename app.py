@@ -35,22 +35,9 @@ window.office-window {
     background: #c0c0c0;
     border: 2px solid #7f7f7f;
 }
-
-#office-root {
-    background: #c0c0c0;
-}
-
-#title-bar {
-    background: #008080;
-    color: white;
-    padding: 3px 6px;
-}
-
-#title-bar label {
-    color: white;
-    font-weight: 700;
-}
-
+#office-root { background: #c0c0c0; }
+#title-bar { background: #008080; color: white; padding: 3px 6px; }
+#title-bar label { color: white; font-weight: 700; }
 .win95-button {
     background: #c0c0c0;
     color: black;
@@ -62,32 +49,20 @@ window.office-window {
     padding: 4px 8px;
     box-shadow: none;
 }
-
 .win95-button:active {
     border-top: 2px solid #404040;
     border-left: 2px solid #404040;
     border-right: 2px solid #ffffff;
     border-bottom: 2px solid #ffffff;
 }
-
 #panel-sunken {
     background: #c0c0c0;
     border-top: 2px solid #808080;
     border-left: 2px solid #808080;
     border-right: 2px solid #ffffff;
     border-bottom: 2px solid #ffffff;
-    padding: 8px;
+    padding: 6px;
 }
-
-#panel-raised {
-    background: #c0c0c0;
-    border-top: 2px solid #ffffff;
-    border-left: 2px solid #ffffff;
-    border-right: 2px solid #808080;
-    border-bottom: 2px solid #808080;
-    padding: 8px;
-}
-
 #gallery-preview {
     background: white;
     border-top: 2px solid #808080;
@@ -95,33 +70,36 @@ window.office-window {
     border-right: 2px solid #ffffff;
     border-bottom: 2px solid #ffffff;
 }
-
+#retro-notebook header,
+#retro-notebook tabs,
+#retro-notebook tab,
+#retro-notebook tabbox {
+    margin: 0;
+    padding: 0;
+}
 #retro-notebook tab {
     background: #c0c0c0;
     border-top: 2px solid #ffffff;
     border-left: 2px solid #ffffff;
     border-right: 2px solid #808080;
     border-bottom: none;
-    padding: 4px 10px;
+    border-radius: 0;
+    padding: 2px 10px;
+    margin-right: 1px;
+    min-height: 0;
 }
-
 #retro-notebook tab:checked {
     background: #c0c0c0;
+    margin-bottom: -1px;
 }
-
-#retro-notebook stack {
+#retro-notebook > stack {
     background: #c0c0c0;
+    border-top: 2px solid #808080;
+    border-left: 2px solid #808080;
+    border-right: 2px solid #ffffff;
+    border-bottom: 2px solid #ffffff;
 }
-
-#speech-label {
-    color: black;
-    font: 14px sans;
-}
-
-#bubble-caption {
-    color: #202020;
-}
-
+#speech-label, #bubble-caption { color: black; }
 combobox, entry {
     background: white;
     color: black;
@@ -133,34 +111,14 @@ combobox, entry {
 }
 '''
 
-AGENT_LIBRARY: list[dict[str, str]] = [
-    {
-        'id': 'clippy',
-        'folder': 'clippy',
-        'name': 'Clippit',
-        'description': 'The classic paperclip assistant who keeps everything together.',
-    },
-    {
-        'id': 'dog',
-        'folder': 'rover',
-        'name': 'Dog',
-        'description': 'A cheerful dog assistant who reacts with playful curiosity.',
-    },
-    {
-        'id': 'merlin',
-        'folder': 'merlin',
-        'name': 'Merlin',
-        'description': 'A wizard assistant for moments that need a little magic.',
-    },
-    {
-        'id': 'genius',
-        'folder': 'genius',
-        'name': 'Genius',
-        'description': 'A scholarly helper with a thoughtful, bookish look.',
-    },
+AGENT_LIBRARY = [
+    {'id': 'clippy', 'folder': 'clippy', 'name': 'Clippit', 'description': 'The classic paperclip assistant who keeps everything together.'},
+    {'id': 'dog', 'folder': 'rover', 'name': 'Dog', 'description': 'A cheerful dog assistant who reacts with playful curiosity.'},
+    {'id': 'merlin', 'folder': 'merlin', 'name': 'Merlin', 'description': 'A wizard assistant for moments that need a little magic.'},
+    {'id': 'genius', 'folder': 'genius', 'name': 'Genius', 'description': 'A scholarly helper with a thoughtful, bookish look.'},
 ]
 
-EVENT_MESSAGES: dict[str, list[str]] = {
+EVENT_MESSAGES = {
     'created_dir': ['A new folder appeared.', 'You created a new folder.'],
     'created_file': ['A new file just showed up.', 'A fresh file was created.'],
     'modified': ['Something was updated.', 'That file changed just now.'],
@@ -170,7 +128,7 @@ EVENT_MESSAGES: dict[str, list[str]] = {
     'idle': ["I'm keeping an eye on your files.", "Nothing new yet. I'm still here."],
 }
 
-EVENT_ANIMATIONS_DEFAULT: dict[str, list[str]] = {
+EVENT_ANIMATIONS_DEFAULT = {
     'created_dir': ['GetAttention', 'Searching', 'Explain'],
     'created_file': ['Writing', 'GetAttention', 'Save'],
     'modified': ['Processing', 'Writing', 'Thinking'],
@@ -206,32 +164,25 @@ class SoundPlayer:
     def play_sound_id(self, sound_id: str | int | None) -> None:
         if sound_id is None or self.sounds_dir is None:
             return
-        base = str(sound_id)
-        sound_path = None
         for ext in ('.ogg', '.oga', '.wav', '.mp3'):
-            candidate = self.sounds_dir / f'{base}{ext}'
-            if candidate.exists():
-                sound_path = candidate
-                break
-        if sound_path is None:
-            return
-        self._spawn_file(sound_path)
+            path = self.sounds_dir / f'{sound_id}{ext}'
+            if path.exists():
+                self._spawn(path)
+                return
 
-    def _spawn_file(self, sound_path: Path) -> None:
+    def _spawn(self, sound_path: Path) -> None:
         cmd = None
-        suffix = sound_path.suffix.lower()
-        if self.paplay and suffix in {'.ogg', '.oga', '.wav'}:
+        if self.paplay and sound_path.suffix.lower() in {'.ogg', '.oga', '.wav'}:
             cmd = [self.paplay, str(sound_path)]
-        elif self.aplay and suffix == '.wav':
+        elif self.aplay and sound_path.suffix.lower() == '.wav':
             cmd = [self.aplay, str(sound_path)]
         elif self.canberra:
             cmd = [self.canberra, '-f', str(sound_path)]
-        if cmd is None:
-            return
-        try:
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception:
-            pass
+        if cmd:
+            try:
+                subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
 
 
 class AgentData:
@@ -245,13 +196,9 @@ class AgentData:
         sub = self.sprite.new_subpixbuf(x, y, self.frame_width, self.frame_height)
         if scale == 1.0:
             return sub
-        return sub.scale_simple(
-            int(self.frame_width * scale),
-            int(self.frame_height * scale),
-            GdkPixbuf.InterpType.BILINEAR,
-        )
+        return sub.scale_simple(int(self.frame_width * scale), int(self.frame_height * scale), GdkPixbuf.InterpType.BILINEAR)
 
-    def get_preview_pixbuf(self, scale: float = 1.1) -> GdkPixbuf.Pixbuf:
+    def get_preview_pixbuf(self, scale: float = 1.2) -> GdkPixbuf.Pixbuf:
         rest = self.animations.get('RestPose') or next(iter(self.animations.values()))
         frame = (rest.get('frames') or [{'images': [[0, 0]]}])[0]
         x, y = (frame.get('images') or [[0, 0]])[0]
@@ -303,10 +250,8 @@ class SpriteAnimator:
         if 'sound' in frame:
             self.on_sound(frame.get('sound'))
         x, y = (frame.get('images') or [[0, 0]])[0]
-        pixbuf = self.agent.get_frame_pixbuf(x, y, self.scale)
-        self.image.set_from_pixbuf(pixbuf)
-        duration = max(int(frame.get('duration', 100)), 30)
-        self.timer_id = GLib.timeout_add(duration, self._advance)
+        self.image.set_from_pixbuf(self.agent.get_frame_pixbuf(x, y, self.scale))
+        self.timer_id = GLib.timeout_add(max(int(frame.get('duration', 100)), 30), self._advance)
 
     def _advance(self) -> bool:
         self.timer_id = None
@@ -340,17 +285,22 @@ class EventBridge(FileSystemEventHandler):
 class OfficeBubble(Gtk.Overlay):
     def __init__(self) -> None:
         super().__init__()
-        self.set_size_request(360, 130)
-        self.bg = Gtk.DrawingArea()
-        self.bg.connect('draw', self._on_draw)
-        self.add(self.bg)
+        self.set_size_request(360, 128)
+        self.body_margin = 6.0
+        self.tail_height = 24.0
+        self.tail_width = 34.0
+        self.tail_offset = 58.0
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box.set_margin_top(18)
-        box.set_margin_bottom(26)
-        box.set_margin_start(26)
-        box.set_margin_end(28)
-        self.add_overlay(box)
+        bg = Gtk.DrawingArea()
+        bg.connect('draw', self._on_draw)
+        self.add(bg)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        content.set_margin_top(16)
+        content.set_margin_bottom(36)
+        content.set_margin_start(24)
+        content.set_margin_end(28)
+        self.add_overlay(content)
 
         self.label = Gtk.Label(label='')
         self.label.set_name('speech-label')
@@ -358,45 +308,45 @@ class OfficeBubble(Gtk.Overlay):
         self.label.set_yalign(0.0)
         self.label.set_line_wrap(True)
         self.label.set_max_width_chars(38)
-        box.pack_start(self.label, True, True, 0)
+        content.pack_start(self.label, True, True, 0)
 
     def set_text(self, text: str) -> None:
         self.label.set_text(text)
 
     def _on_draw(self, _widget, cr):
-        alloc = self.get_allocation()
-        w = alloc.width
-        h = alloc.height
-        radius = 14.0
-        tail_x = 68.0
-        tail_y = h - 26.0
-        # filled bubble
-        cr.set_source_rgb(1.0, 0.968, 0.78)
-        self._rounded_rect(cr, 6.0, 6.0, w - 12.0, h - 34.0, radius)
+        a = self.get_allocation()
+        x = self.body_margin
+        y = self.body_margin
+        w = float(a.width) - self.body_margin * 2
+        h = float(a.height) - self.tail_height - self.body_margin
+        r = 5.0
+        tail_center = max(x + 30.0, min(x + w - 30.0, x + self.tail_offset))
+        tail_left = tail_center - self.tail_width / 2.0
+        tail_right = tail_center + self.tail_width / 2.0
+        tail_tip_x = tail_center - 1.0
+        tail_tip_y = y + h + self.tail_height
+        self._bubble_path(cr, x, y, w, h, r, tail_left, tail_right, tail_tip_x, tail_tip_y)
+        cr.set_source_rgb(0.937, 0.917, 0.745)
         cr.fill_preserve()
-        cr.move_to(tail_x - 12, tail_y)
-        cr.line_to(tail_x + 4, h - 2)
-        cr.line_to(tail_x + 18, tail_y - 2)
-        cr.close_path()
-        cr.fill()
-        # outline
-        cr.set_source_rgb(0, 0, 0)
+        cr.set_source_rgb(0.0, 0.0, 0.0)
         cr.set_line_width(2.0)
-        self._rounded_rect(cr, 6.0, 6.0, w - 12.0, h - 34.0, radius)
-        cr.stroke()
-        cr.move_to(tail_x - 12, tail_y)
-        cr.line_to(tail_x + 4, h - 2)
-        cr.line_to(tail_x + 18, tail_y - 2)
-        cr.close_path()
         cr.stroke()
         return False
 
     @staticmethod
-    def _rounded_rect(cr, x, y, w, h, r):
-        cr.new_sub_path()
+    def _bubble_path(cr, x, y, w, h, r, tail_left, tail_right, tail_tip_x, tail_tip_y):
+        cr.new_path()
+        cr.move_to(x + r, y)
+        cr.line_to(x + w - r, y)
         cr.arc(x + w - r, y + r, r, -math.pi / 2, 0)
+        cr.line_to(x + w, y + h - r)
         cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
+        cr.line_to(tail_right, y + h)
+        cr.line_to(tail_tip_x, tail_tip_y)
+        cr.line_to(tail_left, y + h)
+        cr.line_to(x + r, y + h)
         cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
+        cr.line_to(x, y + r)
         cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
         cr.close_path()
 
@@ -447,13 +397,11 @@ class OfficeActionsWindow(Gtk.Window):
 
         notebook = Gtk.Notebook()
         notebook.set_name('retro-notebook')
+        notebook.set_scrollable(False)
         outer.pack_start(notebook, True, True, 0)
 
-        actions_page = self._build_actions_page()
-        notebook.append_page(actions_page, Gtk.Label(label='Actions'))
-
-        gallery_page = self._build_gallery_page()
-        notebook.append_page(gallery_page, Gtk.Label(label='Gallery'))
+        notebook.append_page(self._build_actions_page(), Gtk.Label(label='Actions'))
+        notebook.append_page(self._build_gallery_page(), Gtk.Label(label='Gallery'))
 
         bottom = Gtk.Box(spacing=8)
         outer.pack_end(bottom, False, False, 0)
@@ -475,131 +423,55 @@ class OfficeActionsWindow(Gtk.Window):
 
     def _build_actions_page(self) -> Gtk.Widget:
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        box.set_margin_start(10)
-        box.set_margin_end(10)
-        box.set_margin_top(10)
-        box.set_margin_bottom(10)
-
-        desc = Gtk.Label(
-            label='Use the buttons below to make your assistant react right away. You can also pick a specific animation.',
-        )
-        desc.set_xalign(0.0)
-        desc.set_line_wrap(True)
+        box.set_margin_start(10); box.set_margin_end(10); box.set_margin_top(10); box.set_margin_bottom(10)
+        desc = Gtk.Label(label='Use the buttons below to make your assistant react right away. You can also pick a specific animation.')
+        desc.set_xalign(0.0); desc.set_line_wrap(True)
         box.pack_start(desc, False, False, 0)
 
-        panel = Gtk.Frame()
-        panel.set_name('panel-sunken')
-        box.pack_start(panel, True, True, 0)
-
+        panel = Gtk.Frame(); panel.set_name('panel-sunken'); box.pack_start(panel, True, True, 0)
         inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        inner.set_margin_start(10)
-        inner.set_margin_end(10)
-        inner.set_margin_top(10)
-        inner.set_margin_bottom(10)
+        inner.set_margin_start(10); inner.set_margin_end(10); inner.set_margin_top(10); inner.set_margin_bottom(10)
         panel.add(inner)
 
         grid = Gtk.Grid(column_spacing=10, row_spacing=10)
         inner.pack_start(grid, False, False, 0)
-
-        manual_actions = [
-            ('New file', 'created_file'),
-            ('New folder', 'created_dir'),
-            ('Modified', 'modified'),
-            ('Deleted', 'deleted'),
-            ('Moved', 'moved'),
-            ('Opened', 'opened'),
-            ('Idle', 'idle'),
-        ]
+        manual_actions = [('New file', 'created_file'), ('New folder', 'created_dir'), ('Modified', 'modified'), ('Deleted', 'deleted'), ('Moved', 'moved'), ('Opened', 'opened'), ('Idle', 'idle')]
         for idx, (label, event_type) in enumerate(manual_actions):
             btn = self._win95_button(label)
             btn.set_size_request(150, 34)
             btn.connect('clicked', lambda *_args, ev=event_type: self.owner.manual_event(ev))
             grid.attach(btn, idx % 2, idx // 2, 1, 1)
 
-        anim_row = Gtk.Box(spacing=8)
-        inner.pack_start(anim_row, False, False, 0)
-
-        self.anim_combo = Gtk.ComboBoxText()
-        self._reload_animation_combo()
-        anim_row.pack_start(self.anim_combo, True, True, 0)
-
-        play_btn = self._win95_button('Play')
-        play_btn.set_size_request(80, 32)
-        play_btn.connect('clicked', self._on_play_animation)
-        anim_row.pack_start(play_btn, False, False, 0)
-
-        rest_btn = self._win95_button('RestPose')
-        rest_btn.set_size_request(120, 32)
-        rest_btn.connect('clicked', lambda *_: self.owner.play_named_animation('RestPose'))
-        anim_row.pack_start(rest_btn, False, False, 0)
-
+        anim_row = Gtk.Box(spacing=8); inner.pack_start(anim_row, False, False, 0)
+        self.anim_combo = Gtk.ComboBoxText(); self._reload_animation_combo(); anim_row.pack_start(self.anim_combo, True, True, 0)
+        play_btn = self._win95_button('Play'); play_btn.set_size_request(80, 32); play_btn.connect('clicked', self._on_play_animation); anim_row.pack_start(play_btn, False, False, 0)
+        rest_btn = self._win95_button('RestPose'); rest_btn.set_size_request(120, 32); rest_btn.connect('clicked', lambda *_: self.owner.play_named_animation('RestPose')); anim_row.pack_start(rest_btn, False, False, 0)
         return box
 
     def _build_gallery_page(self) -> Gtk.Widget:
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        box.set_margin_start(10)
-        box.set_margin_end(10)
-        box.set_margin_top(10)
-        box.set_margin_bottom(10)
-
-        desc = Gtk.Label(
-            label='You can scroll through the different assistants by using the <Back and Next> buttons. When you are finished selecting your assistant, click the OK button.',
-        )
-        desc.set_xalign(0.0)
-        desc.set_line_wrap(True)
+        box.set_margin_start(10); box.set_margin_end(10); box.set_margin_top(10); box.set_margin_bottom(10)
+        desc = Gtk.Label(label='You can scroll through the different assistants by using the <Back and Next> buttons. When you are finished selecting your assistant, click the OK button.')
+        desc.set_xalign(0.0); desc.set_line_wrap(True)
         box.pack_start(desc, False, False, 0)
 
-        panel = Gtk.Frame()
-        panel.set_name('panel-sunken')
-        box.pack_start(panel, True, True, 0)
-
+        panel = Gtk.Frame(); panel.set_name('panel-sunken'); box.pack_start(panel, True, True, 0)
         panel_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
-        panel_box.set_margin_start(12)
-        panel_box.set_margin_end(12)
-        panel_box.set_margin_top(12)
-        panel_box.set_margin_bottom(12)
+        panel_box.set_margin_start(12); panel_box.set_margin_end(12); panel_box.set_margin_top(12); panel_box.set_margin_bottom(12)
         panel.add(panel_box)
 
-        self.preview_frame = Gtk.Frame()
-        self.preview_frame.set_name('gallery-preview')
-        self.preview_frame.set_size_request(200, 180)
-        panel_box.pack_start(self.preview_frame, False, False, 0)
+        self.preview_frame = Gtk.Frame(); self.preview_frame.set_name('gallery-preview'); self.preview_frame.set_size_request(200, 180); panel_box.pack_start(self.preview_frame, False, False, 0)
+        preview_box = Gtk.Box(); preview_box.set_halign(Gtk.Align.CENTER); preview_box.set_valign(Gtk.Align.CENTER); self.preview_frame.add(preview_box)
+        self.preview_image = Gtk.Image(); preview_box.pack_start(self.preview_image, False, False, 0)
 
-        preview_align = Gtk.Alignment.new(0.5, 0.5, 0, 0)
-        self.preview_frame.add(preview_align)
-        self.preview_image = Gtk.Image()
-        preview_align.add(self.preview_image)
+        right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8); panel_box.pack_start(right, True, True, 0)
+        self.preview_bubble = OfficeBubble(); self.preview_bubble.set_size_request(360, 140); right.pack_start(self.preview_bubble, False, False, 0)
+        self.preview_name = Gtk.Label(); self.preview_name.set_xalign(0.0); self.preview_name.set_name('bubble-caption'); right.pack_start(self.preview_name, False, False, 0)
+        self.preview_desc = Gtk.Label(); self.preview_desc.set_xalign(0.0); self.preview_desc.set_line_wrap(True); right.pack_start(self.preview_desc, False, False, 0)
 
-        right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        panel_box.pack_start(right, True, True, 0)
-
-        self.preview_bubble = OfficeBubble()
-        self.preview_bubble.set_size_request(360, 140)
-        right.pack_start(self.preview_bubble, False, False, 0)
-
-        self.preview_name = Gtk.Label()
-        self.preview_name.set_xalign(0.0)
-        self.preview_name.set_name('bubble-caption')
-        right.pack_start(self.preview_name, False, False, 0)
-
-        self.preview_desc = Gtk.Label()
-        self.preview_desc.set_xalign(0.0)
-        self.preview_desc.set_line_wrap(True)
-        right.pack_start(self.preview_desc, False, False, 0)
-
-        nav = Gtk.Box(spacing=10)
-        box.pack_start(nav, False, False, 0)
-
-        back_btn = self._win95_button('< Back')
-        back_btn.set_size_request(110, 34)
-        back_btn.connect('clicked', lambda *_: self._step_gallery(-1))
-        nav.pack_start(back_btn, False, False, 0)
-
-        next_btn = self._win95_button('Next >')
-        next_btn.set_size_request(110, 34)
-        next_btn.connect('clicked', lambda *_: self._step_gallery(1))
-        nav.pack_start(next_btn, False, False, 0)
-
+        nav = Gtk.Box(spacing=10); box.pack_start(nav, False, False, 0)
+        back_btn = self._win95_button('< Back'); back_btn.set_size_request(110, 34); back_btn.connect('clicked', lambda *_: self._step_gallery(-1)); nav.pack_start(back_btn, False, False, 0)
+        next_btn = self._win95_button('Next >'); next_btn.set_size_request(110, 34); next_btn.connect('clicked', lambda *_: self._step_gallery(1)); nav.pack_start(next_btn, False, False, 0)
         nav.pack_start(Gtk.Box(), True, True, 0)
         return box
 
@@ -625,13 +497,12 @@ class OfficeActionsWindow(Gtk.Window):
         self.preview_desc.set_text(meta.description)
 
     def _gallery_quote(self, agent_id: str) -> str:
-        quotes = {
+        return {
             'clippy': "How's life? All work and no play?",
             'dog': 'Want me to sniff around your files?',
             'merlin': 'A little wizardry can brighten any workflow.',
             'genius': 'Let us approach this with a truly brilliant plan.',
-        }
-        return quotes.get(agent_id, 'Choose the assistant you would like to use.')
+        }.get(agent_id, 'Choose the assistant you would like to use.')
 
     def _on_play_animation(self, *_args) -> None:
         text = self.anim_combo.get_active_text()
@@ -691,8 +562,7 @@ class AssistantWindow(Gtk.Window):
         self.agent_metas = [AgentMeta(item['id'], item['folder'], item['name'], item['description']) for item in AGENT_LIBRARY]
         self.current_agent_index = 0
         self.agent_data = self._load_agent_data(self.agent_metas[self.current_agent_index])
-        self.sound_player = SoundPlayer()
-        self.sound_player.set_agent_dir(self.agent_metas[self.current_agent_index].path / 'sounds')
+        self.sound_player = SoundPlayer(); self.sound_player.set_agent_dir(self.agent_metas[self.current_agent_index].path / 'sounds')
         self.actions_window = OfficeActionsWindow(self)
         self.queue: deque[tuple[str, str]] = deque()
         self.is_busy = False
@@ -701,39 +571,19 @@ class AssistantWindow(Gtk.Window):
         self.last_recent_seen = 0.0
         self.observer: Observer | None = None
 
-        root = Gtk.Overlay()
-        self.add(root)
-
-        drag_box = Gtk.EventBox()
-        drag_box.set_visible_window(False)
-        drag_box.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
-        drag_box.connect('button-press-event', self._on_button_press)
-        root.add(drag_box)
-
+        root = Gtk.Overlay(); self.add(root)
+        drag_box = Gtk.EventBox(); drag_box.set_visible_window(False); drag_box.add_events(Gdk.EventMask.BUTTON_PRESS_MASK); drag_box.connect('button-press-event', self._on_button_press); root.add(drag_box)
         layout = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        layout.set_margin_top(8)
-        layout.set_margin_bottom(8)
-        layout.set_margin_start(8)
-        layout.set_margin_end(8)
+        layout.set_margin_top(8); layout.set_margin_bottom(8); layout.set_margin_start(8); layout.set_margin_end(8)
         drag_box.add(layout)
-
-        self.top_bubble = OfficeBubble()
-        self.top_bubble.set_halign(Gtk.Align.CENTER)
-        layout.pack_start(self.top_bubble, False, False, 0)
-
-        self.image = Gtk.Image()
-        self.image.set_halign(Gtk.Align.CENTER)
-        self.image.set_valign(Gtk.Align.CENTER)
-        layout.pack_start(self.image, True, True, 0)
+        self.top_bubble = OfficeBubble(); self.top_bubble.set_halign(Gtk.Align.CENTER); layout.pack_start(self.top_bubble, False, False, 0)
+        self.image = Gtk.Image(); self.image.set_halign(Gtk.Align.CENTER); self.image.set_valign(Gtk.Align.CENTER); layout.pack_start(self.image, True, True, 0)
 
         self.animator = SpriteAnimator(self.image, self._on_animation_finished, self.sound_player.play_sound_id)
         self.animator.set_agent(self.agent_data)
-
         self.show_all()
         self._set_intro_speech()
-        self._start_watchdog()
-        self._start_recent_monitor()
-        GLib.timeout_add_seconds(2, self._idle_tick)
+        self._start_watchdog(); self._start_recent_monitor(); GLib.timeout_add_seconds(2, self._idle_tick)
         self.enqueue('opened', 'Application started')
 
     def _load_agent_data(self, meta: AgentMeta) -> AgentData:
@@ -751,18 +601,13 @@ class AssistantWindow(Gtk.Window):
         self.top_bubble.set_text(clamp_text(text, 160))
 
     def _set_intro_speech(self) -> None:
-        meta = self.agent_metas[self.current_agent_index]
-        self.set_speech(f'{meta.name} is watching your files.')
+        self.set_speech(f'{self.agent_metas[self.current_agent_index].name} is watching your files.')
 
     def manual_event(self, event_type: str) -> None:
         self.enqueue(event_type, f'Manual {event_type}')
 
     def play_named_animation(self, name: str) -> None:
-        self.queue.clear()
-        self.is_busy = True
-        self.last_idle = time.monotonic()
-        self.set_speech(f'Playing animation: {name}')
-        self.animator.set_animation(name)
+        self.queue.clear(); self.is_busy = True; self.last_idle = time.monotonic(); self.set_speech(f'Playing animation: {name}'); self.animator.set_animation(name)
 
     def _on_window_draw(self, _widget, cr):
         cr.set_source_rgba(0.0, 0.0, 0.0, 0.0)
@@ -786,10 +631,8 @@ class AssistantWindow(Gtk.Window):
 
     def _on_destroy(self, *_args) -> None:
         if self.observer is not None:
-            self.observer.stop()
-            self.observer.join(timeout=2)
-        if self.actions_window is not None:
-            self.actions_window.destroy()
+            self.observer.stop(); self.observer.join(timeout=2)
+        self.actions_window.destroy()
         Gtk.main_quit()
 
     def _start_watchdog(self) -> None:
@@ -801,9 +644,7 @@ class AssistantWindow(Gtk.Window):
         observer = Observer()
         for path in existing:
             observer.schedule(handler, str(path), recursive=True)
-        observer.daemon = True
-        observer.start()
-        self.observer = observer
+        observer.daemon = True; observer.start(); self.observer = observer
 
     def _watchdog_callback(self, event_type: str, path: str) -> None:
         GLib.idle_add(self.enqueue, event_type, path)
@@ -827,15 +668,11 @@ class AssistantWindow(Gtk.Window):
             return
         if self.last_recent_uri == uri and now - self.last_recent_seen < 10:
             return
-        self.last_recent_uri = uri
-        self.last_recent_seen = now
-        display = item.get_display_name() or uri
-        self.enqueue('opened', display)
+        self.last_recent_uri = uri; self.last_recent_seen = now
+        self.enqueue('opened', item.get_display_name() or uri)
 
     def enqueue(self, event_type: str, payload: str) -> bool:
-        self.queue.append((event_type, payload))
-        self._try_start_next()
-        return False
+        self.queue.append((event_type, payload)); self._try_start_next(); return False
 
     def _available_event_animations(self, event_type: str) -> list[str]:
         preferred = EVENT_ANIMATIONS_DEFAULT.get(event_type, ['RestPose'])
@@ -847,15 +684,12 @@ class AssistantWindow(Gtk.Window):
             return
         event_type, payload = self.queue.popleft()
         anim = random.choice(self._available_event_animations(event_type))
-        text_options = EVENT_MESSAGES.get(event_type, ['Something happened.'])
-        message = random.choice(text_options)
+        message = random.choice(EVENT_MESSAGES.get(event_type, ['Something happened.']))
         name = Path(payload).name if payload else payload
         if name:
             message = f'{message}\n{name}'
         self.set_speech(message)
-        self.is_busy = True
-        self.last_idle = time.monotonic()
-        self.animator.set_animation(anim)
+        self.is_busy = True; self.last_idle = time.monotonic(); self.animator.set_animation(anim)
 
     def _on_animation_finished(self, _animation_name: str) -> None:
         self.is_busy = False
@@ -864,8 +698,7 @@ class AssistantWindow(Gtk.Window):
         GLib.timeout_add(50, self._continue_queue)
 
     def _continue_queue(self) -> bool:
-        self._try_start_next()
-        return False
+        self._try_start_next(); return False
 
     def _idle_tick(self) -> bool:
         if not self.is_busy and not self.queue and (time.monotonic() - self.last_idle) >= IDLE_SECONDS:
@@ -879,8 +712,7 @@ def clamp_text(text: str, limit: int = 120) -> str:
 
 
 def install_css() -> None:
-    provider = Gtk.CssProvider()
-    provider.load_from_data(RETRO_CSS)
+    provider = Gtk.CssProvider(); provider.load_from_data(RETRO_CSS)
     screen = Gdk.Screen.get_default()
     if screen is not None:
         Gtk.StyleContext.add_provider_for_screen(screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
