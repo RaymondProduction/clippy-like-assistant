@@ -608,7 +608,7 @@ class OfficeActionsWindow(Gtk.Window):
 
         close_btn = self._win95_button('×')
         close_btn.set_size_request(32, 26)
-        close_btn.connect('clicked', lambda *_: self.hide())
+        close_btn.connect('clicked', lambda *_: self.destroy())
         title_bar.pack_end(close_btn, False, False, 0)
 
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -637,7 +637,7 @@ class OfficeActionsWindow(Gtk.Window):
 
         cancel_btn = self._win95_button('Cancel')
         cancel_btn.set_size_request(120, 34)
-        cancel_btn.connect('clicked', lambda *_: self.hide())
+        cancel_btn.connect('clicked', lambda *_: self.destroy())
         bottom.pack_end(cancel_btn, False, False, 0)
 
         self._refresh_gallery_preview()
@@ -970,7 +970,7 @@ class OfficeActionsWindow(Gtk.Window):
     def _on_ok(self, *_args) -> None:
         self.owner.set_agent_by_index(self.gallery_index)
         self._reload_animation_combo()
-        self.hide()
+        self.destroy()
 
 
 class TrayIndicator:
@@ -1014,7 +1014,7 @@ class TrayIndicator:
         self.owner.toggle_visibility()
 
     def _on_open_actions(self, *_args) -> None:
-        self.owner.actions_window.present_for(self.owner)
+        self.owner.open_actions_window()
 
     def _on_restpose(self, *_args) -> None:
         self.owner.play_named_animation('RestPose')
@@ -1056,7 +1056,7 @@ class AssistantWindow(Gtk.Window):
         self.agent_data = self._load_agent_data(self.agent_metas[self.current_agent_index])
         self.sound_player = SoundPlayer()
         self.sound_player.set_agent_dir(self.agent_metas[self.current_agent_index].path / 'sounds')
-        self.actions_window = OfficeActionsWindow(self)
+        self.actions_window: OfficeActionsWindow | None = None
         self.queue: deque[tuple[str, str, dict[str, Any]]] = deque()
         self.is_busy = False
         self.last_idle = time.monotonic()
@@ -1103,6 +1103,15 @@ class AssistantWindow(Gtk.Window):
         GLib.timeout_add_seconds(2, self._idle_tick)
         GLib.idle_add(lambda: self.trigger_signal('ProgramStart', {'source': 'app'}))
 
+    def open_actions_window(self) -> None:
+        if self.actions_window is None:
+            self.actions_window = OfficeActionsWindow(self)
+            self.actions_window.connect('destroy', self._on_actions_window_destroy)
+        self.actions_window.present_for(self)
+
+    def _on_actions_window_destroy(self, *_args) -> None:
+        self.actions_window = None
+
     def sync_profile_settings(self) -> None:
         self.idle_every_seconds = float(self.profile.settings.get('idle_every_seconds', 600))
         self.global_min_gap_seconds = float(self.profile.settings.get('global_min_gap_seconds', 12))
@@ -1117,7 +1126,8 @@ class AssistantWindow(Gtk.Window):
         self.agent_data = self._load_agent_data(meta)
         self.sound_player.set_agent_dir(meta.path / 'sounds')
         self.animator.set_agent(self.agent_data)
-        self.actions_window._reload_animation_combo()
+        if self.actions_window is not None:
+            self.actions_window._reload_animation_combo()
         self.set_speech(f'{meta.name} is now ready to help you.')
 
     def set_speech(self, text: str) -> None:
@@ -1166,7 +1176,7 @@ class AssistantWindow(Gtk.Window):
         if event.button != 1:
             return False
         if event.type == Gdk.EventType._2BUTTON_PRESS:
-            self.actions_window.present_for(self)
+            self.open_actions_window()
             return True
         if event.type == Gdk.EventType.BUTTON_PRESS:
             try:
@@ -1181,7 +1191,7 @@ class AssistantWindow(Gtk.Window):
             self.present()
             self.is_hidden = False
         else:
-            self.hide()
+            self.destroy()
             self.is_hidden = True
 
     def force_quit(self) -> None:
@@ -1194,7 +1204,7 @@ class AssistantWindow(Gtk.Window):
         return False
 
     def _on_delete_event(self, *_args):
-        self.hide()
+        self.destroy()
         self.is_hidden = True
         return True
 
@@ -1202,7 +1212,11 @@ class AssistantWindow(Gtk.Window):
         if self.observer is not None:
             self.observer.stop()
             self.observer.join(timeout=2)
-        self.actions_window.destroy()
+        if self.actions_window is not None:
+            try:
+                self.actions_window.destroy()
+            except Exception:
+                pass
         Gtk.main_quit()
 
     def _start_watchdog(self) -> None:
