@@ -93,34 +93,74 @@ EVENT_MESSAGES: dict[str, list[str]] = {
 }
 
 TRANSPARENT_CSS = b"""
-window, box, overlay, eventbox {
+#clippy-window,
+#clippy-window box,
+#clippy-window overlay,
+#clippy-window eventbox {
     background-color: transparent;
     background-image: none;
     box-shadow: none;
     border: none;
 }
 #bubble {
-    background: rgba(18, 18, 18, 0.70);
-    border-radius: 12px;
-    padding: 8px 10px;
+    background: rgba(18, 18, 18, 0.78);
+    border-radius: 14px;
+    padding: 8px 12px;
 }
 #bubble label {
-    color: white;
+    color: #ffffff;
 }
-#control-pill {
-    background: rgba(18, 18, 18, 0.58);
-    border-radius: 12px;
-    padding: 3px;
+#control-window {
+    background: #17181c;
 }
-#control-pill button {
-    background: rgba(255, 255, 255, 0.12);
-    color: white;
-    border: none;
+#control-root {
+    background: #17181c;
+}
+#section-card {
+    background: #23252b;
+    border: 1px solid #32353d;
+    border-radius: 14px;
+    padding: 14px;
+}
+#section-title {
+    color: #f4f6fb;
+    font-weight: 700;
+}
+#section-subtitle {
+    color: #aeb4c0;
+}
+#control-window button {
+    background: #30343d;
+    background-image: none;
+    border: 1px solid #4a505c;
+    border-radius: 10px;
+    color: #f6f8ff;
     box-shadow: none;
-    border-radius: 8px;
+    padding: 8px 10px;
 }
-#control-pill button:hover {
-    background: rgba(255, 255, 255, 0.20);
+#control-window button:hover {
+    background: #3a3f49;
+}
+#control-window button:active {
+    background: #464c57;
+}
+#control-window button label,
+#control-window label,
+#control-window combobox,
+#control-window combobox box,
+#control-window combobox box label {
+    color: #f6f8ff;
+}
+#control-window combobox,
+#control-window combobox box {
+    background: #22252b;
+    background-image: none;
+    border: 1px solid #4a505c;
+    border-radius: 10px;
+    padding: 6px 8px;
+}
+#control-window separator {
+    background: #32353d;
 }
 """
 
@@ -317,9 +357,118 @@ class EventBridge(FileSystemEventHandler):
         self.callback("moved", getattr(event, "dest_path", event.src_path))
 
 
+class ControlWindow(Gtk.Window):
+    def __init__(self, owner: "ClippyWindow") -> None:
+        super().__init__(title="Clippy Actions")
+        self.owner = owner
+        self.set_name("control-window")
+        self.set_default_size(440, 420)
+        self.set_resizable(False)
+        self.set_keep_above(True)
+        self.set_type_hint(Gdk.WindowTypeHint.UTILITY)
+        self.set_position(Gtk.WindowPosition.CENTER_ALWAYS)
+
+        header = Gtk.HeaderBar()
+        header.set_show_close_button(True)
+        header.props.title = "Clippy Actions"
+        header.props.subtitle = "Double-click Clippy to open this window"
+        self.set_titlebar(header)
+
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        root.set_name("control-root")
+        root.set_border_width(16)
+        self.add(root)
+
+        actions_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        actions_card.set_name("section-card")
+        root.pack_start(actions_card, False, False, 0)
+
+        title = Gtk.Label()
+        title.set_name("section-title")
+        title.set_markup("<span size='large' weight='bold'>Manual actions</span>")
+        title.set_xalign(0.0)
+        actions_card.pack_start(title, False, False, 0)
+
+        subtitle = Gtk.Label(label="Trigger file-related reactions yourself.")
+        subtitle.set_name("section-subtitle")
+        subtitle.set_xalign(0.0)
+        actions_card.pack_start(subtitle, False, False, 0)
+
+        events_grid = Gtk.Grid(column_spacing=10, row_spacing=10)
+        actions_card.pack_start(events_grid, False, False, 0)
+
+        event_buttons = [
+            ("New file", "created_file", "manual-file.txt"),
+            ("New folder", "created_dir", "Manual Folder"),
+            ("Modified", "modified", "manual-edit.txt"),
+            ("Deleted", "deleted", "manual-delete.txt"),
+            ("Moved", "moved", "manual-moved.txt"),
+            ("Opened", "opened", "manual-open.txt"),
+            ("Idle", "idle", ""),
+        ]
+        for idx, (label, event_type, payload) in enumerate(event_buttons):
+            btn = Gtk.Button(label=label)
+            btn.set_hexpand(True)
+            btn.connect("clicked", self._on_manual_event_clicked, event_type, payload)
+            events_grid.attach(btn, idx % 2, idx // 2, 1, 1)
+
+        animations_card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        animations_card.set_name("section-card")
+        root.pack_start(animations_card, True, True, 0)
+
+        anim_title = Gtk.Label()
+        anim_title.set_name("section-title")
+        anim_title.set_markup("<span size='large' weight='bold'>Animations</span>")
+        anim_title.set_xalign(0.0)
+        animations_card.pack_start(anim_title, False, False, 0)
+
+        anim_subtitle = Gtk.Label(label="Choose any built-in Clippy animation.")
+        anim_subtitle.set_name("section-subtitle")
+        anim_subtitle.set_xalign(0.0)
+        animations_card.pack_start(anim_subtitle, False, False, 0)
+
+        combo_row = Gtk.Box(spacing=10)
+        animations_card.pack_start(combo_row, False, False, 0)
+
+        self.animation_combo = Gtk.ComboBoxText()
+        self.animation_combo.set_hexpand(True)
+        animation_names = sorted(self.owner.agent.animations.keys())
+        for name in animation_names:
+            self.animation_combo.append_text(name)
+        if animation_names:
+            default_index = animation_names.index("Greeting") if "Greeting" in animation_names else 0
+            self.animation_combo.set_active(default_index)
+        combo_row.pack_start(self.animation_combo, True, True, 0)
+
+        play_btn = Gtk.Button(label="Play")
+        play_btn.connect("clicked", self._on_play_animation_clicked)
+        combo_row.pack_start(play_btn, False, False, 0)
+
+        rest_btn = Gtk.Button(label="Back to RestPose")
+        rest_btn.connect("clicked", self._on_restpose_clicked)
+        animations_card.pack_start(rest_btn, False, False, 0)
+
+        bottom_row = Gtk.Box(spacing=10)
+        root.pack_end(bottom_row, False, False, 0)
+
+        hide_btn = Gtk.Button(label="Hide controls")
+        hide_btn.connect("clicked", lambda *_: self.hide())
+        bottom_row.pack_end(hide_btn, False, False, 0)
+
+    def _on_manual_event_clicked(self, _button: Gtk.Button, event_type: str, payload: str) -> None:
+        self.owner.enqueue(event_type, payload)
+
+    def _on_play_animation_clicked(self, _button: Gtk.Button) -> None:
+        self.owner.play_manual_animation(self.animation_combo.get_active_text())
+
+    def _on_restpose_clicked(self, _button: Gtk.Button) -> None:
+        self.owner.force_restpose()
+
+
 class ClippyWindow(Gtk.Window):
     def __init__(self) -> None:
         super().__init__(title=APP_NAME)
+        self.set_name("clippy-window")
         self.set_default_size(260, 270)
         self.set_resizable(False)
         self.set_decorated(False)
@@ -387,24 +536,7 @@ class ClippyWindow(Gtk.Window):
         self.message.set_width_chars(28)
         self.bubble_box.pack_start(self.message, True, True, 0)
 
-        self.control_pill = Gtk.Box(spacing=4)
-        self.control_pill.set_name("control-pill")
-        self.control_pill.set_halign(Gtk.Align.CENTER)
-        self.control_pill.set_valign(Gtk.Align.START)
-        root.add_overlay(self.control_pill)
-        self.control_pill.set_margin_top(6)
-
-        greet_btn = Gtk.Button(label="Greet")
-        greet_btn.connect("clicked", lambda *_: self.enqueue("opened", "Manual greet"))
-        self.control_pill.pack_start(greet_btn, False, False, 0)
-
-        idle_btn = Gtk.Button(label="Idle")
-        idle_btn.connect("clicked", lambda *_: self.enqueue("idle", "Manual idle"))
-        self.control_pill.pack_start(idle_btn, False, False, 0)
-
-        close_btn = Gtk.Button(label="×")
-        close_btn.connect("clicked", lambda *_: self.close())
-        self.control_pill.pack_start(close_btn, False, False, 0)
+        self.control_window: ControlWindow | None = None
 
         self.animator = SpriteAnimator(self.image, self.agent, self._on_animation_finished, self.sound_player.play_sound_id)
 
@@ -414,6 +546,40 @@ class ClippyWindow(Gtk.Window):
         GLib.timeout_add_seconds(2, self._idle_tick)
         self.enqueue("opened", "Application started")
 
+
+    def _on_actions_clicked(self, *_args) -> None:
+        if self.control_window is None:
+            self.control_window = ControlWindow(self)
+            self.control_window.connect("delete-event", self._on_control_delete)
+        self.control_window.show_all()
+        self.control_window.present()
+        try:
+            self.control_window.grab_focus()
+        except Exception:
+            pass
+
+    def _on_control_delete(self, widget, *_args):
+        widget.hide()
+        return True
+
+    def play_manual_animation(self, animation_name: str | None) -> None:
+        if self.is_busy or not animation_name:
+            return
+        self.queue.clear()
+        self.is_busy = True
+        self.last_idle = time.monotonic()
+        self.message.set_text(clamp_text(f"Manual animation\n{animation_name}", 120))
+        if not self.agent.animation_has_embedded_sound(animation_name):
+            self.sound_player.play_event("opened")
+        self.animator.set_animation(animation_name)
+        self.bubble_box.show()
+
+    def force_restpose(self) -> None:
+        self.queue.clear()
+        self.is_busy = False
+        self.animator.set_animation("RestPose")
+        self.message.set_text("RestPose")
+
     def _on_window_draw(self, _widget, cr):
         cr.set_source_rgba(0.0, 0.0, 0.0, 0.0)
         cr.set_operator(1)
@@ -422,6 +588,9 @@ class ClippyWindow(Gtk.Window):
         return False
 
     def _on_button_press(self, _widget, event):
+        if event.button == 1 and event.type == Gdk.EventType._2BUTTON_PRESS:
+            self._on_actions_clicked()
+            return True
         if event.type == Gdk.EventType.BUTTON_PRESS and event.button == 1:
             try:
                 self.begin_move_drag(event.button, int(event.x_root), int(event.y_root), event.time)
@@ -430,6 +599,11 @@ class ClippyWindow(Gtk.Window):
         return False
 
     def _on_destroy(self, *_args) -> None:
+        if self.control_window is not None:
+            try:
+                self.control_window.destroy()
+            except Exception:
+                pass
         if self.observer is not None:
             self.observer.stop()
             self.observer.join(timeout=2)
