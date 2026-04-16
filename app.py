@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import random
+import shutil
+import subprocess
 import time
 from collections import deque
 from pathlib import Path
@@ -22,6 +24,8 @@ BASE_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = BASE_DIR / "assets"
 AGENT_JSON = ASSETS_DIR / "clippy_agent.json"
 MAP_PNG = ASSETS_DIR / "clippy_map.png"
+SOUNDS_DIR = ASSETS_DIR / "sounds"
+CLIPPY_SOUNDS_DIR = SOUNDS_DIR / "clippy"
 WATCH_DIRS = [Path.home() / name for name in ("Desktop", "Downloads", "Documents")]
 WINDOW_SCALE = 1.55
 IDLE_SECONDS = 10.0
@@ -35,6 +39,26 @@ EVENT_ANIMATIONS: dict[str, list[str]] = {
     "moved": ["Searching", "GestureLeft", "GestureRight"],
     "opened": ["Greeting", "GetAttention", "Explain"],
     "idle": ["Idle1_1", "IdleAtom", "LookUp", "LookRight", "RestPose"],
+}
+
+EVENT_SOUNDS: dict[str, str] = {
+    "created_dir": "folder-created",
+    "created_file": "file-created",
+    "modified": "file-modified",
+    "deleted": "file-deleted",
+    "moved": "file-moved",
+    "opened": "file-opened",
+    "idle": "idle",
+}
+
+FALLBACK_SOUND_THEMES: dict[str, tuple[str, ...]] = {
+    "folder-created": ("complete", "dialog-information", "service-login"),
+    "file-created": ("complete", "dialog-information", "service-login"),
+    "file-modified": ("message", "dialog-information", "bell"),
+    "file-deleted": ("trash-empty", "dialog-warning", "bell"),
+    "file-moved": ("window-attention", "dialog-information", "bell"),
+    "file-opened": ("button-pressed", "dialog-information", "bell"),
+    "idle": ("bell", "dialog-information"),
 }
 
 EVENT_MESSAGES: dict[str, list[str]] = {
@@ -118,6 +142,87 @@ def clamp_text(text: str, limit: int = 90) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+class SoundPlayer:
+    def __init__(self, sounds_dir: Path, clippy_sounds_dir: Path) -> None:
+        self.sounds_dir = sounds_dir
+        self.clippy_sounds_dir = clippy_sounds_dir
+        self.canberra = shutil.which("canberra-gtk-play")
+        self.paplay = shutil.which("paplay")
+        self.aplay = shutil.which("aplay")
+
+    def play_event(self, event_type: str) -> None:
+        sound_key = EVENT_SOUNDS.get(event_type)
+        if not sound_key:
+            return
+        custom_sound = self._find_custom_sound(sound_key)
+        if custom_sound is not None:
+            self._spawn_file_player(custom_sound)
+            return
+        self._play_fallback_theme(sound_key)
+
+    def play_sound_id(self, sound_id: str | int | None) -> None:
+        if sound_id is None:
+            return
+        sound_path = self._find_clippy_sound(str(sound_id))
+        if sound_path is not None:
+            self._spawn_file_player(sound_path)
+
+    def _find_custom_sound(self, sound_key: str) -> Path | None:
+        for ext in (".wav", ".ogg", ".oga", ".mp3"):
+            candidate = self.sounds_dir / f"{sound_key}{ext}"
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _find_clippy_sound(self, sound_id: str) -> Path | None:
+        for ext in (".ogg", ".oga", ".wav", ".mp3"):
+            candidate = self.clippy_sounds_dir / f"{sound_id}{ext}"
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _spawn_file_player(self, sound_path: Path) -> None:
+        cmd = None
+        suffix = sound_path.suffix.lower()
+        if self.paplay and suffix in {".wav", ".ogg", ".oga"}:
+            cmd = [self.paplay, str(sound_path)]
+        elif self.aplay and suffix == ".wav":
+            cmd = [self.aplay, str(sound_path)]
+        elif self.canberra:
+            cmd = [self.canberra, "-f", str(sound_path)]
+        if cmd is None:
+            self._system_beep()
+            return
+        self._spawn(cmd)
+
+    def _play_fallback_theme(self, sound_key: str) -> None:
+        names = FALLBACK_SOUND_THEMES.get(sound_key, ())
+        if self.canberra:
+            for name in names:
+                if self._spawn([self.canberra, "-i", name]):
+                    return
+        self._system_beep()
+
+    def _spawn(self, cmd: list[str]) -> bool:
+        try:
+            subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return True
+        except Exception:
+            return False
+
+    def _system_beep(self) -> None:
+        try:
+            display = Gdk.Display.get_default()
+            if display is not None:
+                display.beep()
+        except Exception:
+            pass
+
+
 class AgentData:
     def __init__(self, json_path: Path, map_path: Path) -> None:
         self.data = json.loads(json_path.read_text())
@@ -135,12 +240,20 @@ class AgentData:
             GdkPixbuf.InterpType.BILINEAR,
         )
 
+    def animation_has_embedded_sound(self, name: str) -> bool:
+        anim = self.animations.get(name, {})
+        for frame in anim.get("frames", []):
+            if "sound" in frame:
+                return True
+        return False
+
 
 class SpriteAnimator:
-    def __init__(self, image: Gtk.Image, agent: AgentData, on_done) -> None:
+    def __init__(self, image: Gtk.Image, agent: AgentData, on_done, on_sound) -> None:
         self.image = image
         self.agent = agent
         self.on_done = on_done
+        self.on_sound = on_sound
         self.timer_id: int | None = None
         self.active_animation = "RestPose"
         self.active_frames: list[dict[str, Any]] = []
@@ -166,6 +279,8 @@ class SpriteAnimator:
         if not self.active_frames:
             return
         frame = self.active_frames[self.frame_index]
+        if "sound" in frame:
+            self.on_sound(frame.get("sound"))
         images = frame.get("images") or [[0, 0]]
         x, y = images[0]
         pixbuf = self.agent.get_frame_pixbuf(x, y, self.scale)
@@ -227,6 +342,7 @@ class ClippyWindow(Gtk.Window):
         self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
 
         self.agent = AgentData(AGENT_JSON, MAP_PNG)
+        self.sound_player = SoundPlayer(SOUNDS_DIR, CLIPPY_SOUNDS_DIR)
         self.queue: deque[tuple[str, str]] = deque()
         self.is_busy = False
         self.last_idle = time.monotonic()
@@ -290,7 +406,7 @@ class ClippyWindow(Gtk.Window):
         close_btn.connect("clicked", lambda *_: self.close())
         self.control_pill.pack_start(close_btn, False, False, 0)
 
-        self.animator = SpriteAnimator(self.image, self.agent, self._on_animation_finished)
+        self.animator = SpriteAnimator(self.image, self.agent, self._on_animation_finished, self.sound_player.play_sound_id)
 
         self.show_all()
         self._start_watchdog()
@@ -300,9 +416,9 @@ class ClippyWindow(Gtk.Window):
 
     def _on_window_draw(self, _widget, cr):
         cr.set_source_rgba(0.0, 0.0, 0.0, 0.0)
-        cr.set_operator(1)  # cairo.OPERATOR_SOURCE
+        cr.set_operator(1)
         cr.paint()
-        cr.set_operator(2)  # cairo.OPERATOR_OVER
+        cr.set_operator(2)
         return False
 
     def _on_button_press(self, _widget, event):
@@ -375,6 +491,8 @@ class ClippyWindow(Gtk.Window):
         if name:
             message = f"{message}\n{name}"
         self.message.set_text(clamp_text(message, 120))
+        if not self.agent.animation_has_embedded_sound(anim):
+            self.sound_player.play_event(event_type)
         self.is_busy = True
         self.last_idle = time.monotonic()
         self.animator.set_animation(anim)
