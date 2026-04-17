@@ -29,7 +29,7 @@ except (ValueError, ImportError):
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-APP_NAME = 'Office Assistant Clone'
+APP_NAME = 'Linux Assistant'
 BASE_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = BASE_DIR / 'assets'
 AGENTS_DIR = ASSETS_DIR / 'agents'
@@ -138,7 +138,7 @@ PROFILE_TEMPLATE = {
     'id': 'default',
     'name': 'Default',
     'version': 1,
-    'description': 'Default behavior profile for Office Assistant Clone.',
+    'description': 'Default behavior profile for Linux Assistant.',
     'settings': {
         'idle_every_seconds': 600,
         'global_min_gap_seconds': 12,
@@ -547,14 +547,7 @@ class OfficeBubble(Gtk.Overlay):
         w = float(a.width) - self.body_margin * 2
         h = float(a.height) - self.tail_height - self.body_margin
         r = 5.0
-        # центр bubble
-        bubble_center = x + w / 2
-
-        # трохи зміщуємо вліво (бо персонаж під bubble трохи зліва)
-        tail_center = bubble_center - 40
-
-        # обмеження щоб не вилазив за межі
-        tail_center = max(x + 30.0, min(x + w - 30.0, tail_center))
+        tail_center = max(x + 30.0, min(x + w - 30.0, x + self.tail_offset))
         tail_left = tail_center - self.tail_width / 2.0
         tail_right = tail_center + self.tail_width / 2.0
         tail_tip_x = tail_center - 1.0
@@ -588,11 +581,12 @@ class OfficeBubble(Gtk.Overlay):
 
 class OfficeActionsWindow(Gtk.Window):
     def __init__(self, owner: 'AssistantWindow') -> None:
-        super().__init__(title='Office Assistant')
+        super().__init__(title='Linux Assistant')
         self.owner = owner
         self.gallery_index = owner.current_agent_index
         self.set_default_size(820, 560)
         self.set_resizable(False)
+        self.set_decorated(False)
         self.set_transient_for(owner)
         self.set_modal(False)
         self.set_type_hint(Gdk.WindowTypeHint.DIALOG)
@@ -602,24 +596,30 @@ class OfficeActionsWindow(Gtk.Window):
         root.set_name('office-root')
         self.add(root)
 
+        title_bar_event = Gtk.EventBox()
+        title_bar_event.set_visible_window(False)
+        title_bar_event.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
+        title_bar_event.connect('button-press-event', self._on_titlebar_button_press)
+        root.pack_start(title_bar_event, False, False, 0)
+
         title_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         title_bar.set_name('title-bar')
         title_bar.set_margin_bottom(10)
-        root.pack_start(title_bar, False, False, 0)
+        title_bar_event.add(title_bar)
 
-        title_lbl = Gtk.Label(label='Office Assistant')
+        title_lbl = Gtk.Label(label='Linux Assistant')
         title_lbl.set_xalign(0.0)
         title_bar.pack_start(title_lbl, True, True, 8)
+
+        close_btn = self._win95_button(None, markup='<b>×</b>')
+        close_btn.set_size_request(32, 26)
+        close_btn.connect('clicked', lambda *_: self.destroy())
+        title_bar.pack_end(close_btn, False, False, 0)
 
         help_btn = self._win95_button('?')
         help_btn.set_size_request(32, 26)
         help_btn.connect('clicked', self._on_help)
         title_bar.pack_end(help_btn, False, False, 0)
-
-        close_btn = self._win95_button('×')
-        close_btn.set_size_request(32, 26)
-        close_btn.connect('clicked', lambda *_: self.destroy())
-        title_bar.pack_end(close_btn, False, False, 0)
 
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         outer.set_margin_start(14)
@@ -660,8 +660,23 @@ class OfficeActionsWindow(Gtk.Window):
         self.show_all()
         self.present()
 
-    def _win95_button(self, label: str) -> Gtk.Button:
-        btn = Gtk.Button(label=label)
+    def _on_titlebar_button_press(self, _widget, event):
+        if event.button != 1:
+            return False
+        try:
+            self.begin_move_drag(event.button, int(event.x_root), int(event.y_root), event.time)
+            return True
+        except Exception:
+            return False
+
+    def _win95_button(self, label: str | None = None, markup: str | None = None) -> Gtk.Button:
+        btn = Gtk.Button()
+        if markup is not None:
+            lbl = Gtk.Label()
+            lbl.set_markup(markup)
+            btn.add(lbl)
+        elif label is not None:
+            btn.set_label(label)
         btn.get_style_context().add_class('win95-button')
         return btn
 
@@ -1024,7 +1039,7 @@ class TrayIndicator:
         show_item = Gtk.MenuItem(label='Show / Hide Assistant')
         show_item.connect('activate', self._on_toggle_visibility)
         menu.append(show_item)
-        office_item = Gtk.MenuItem(label='Open Office Assistant')
+        office_item = Gtk.MenuItem(label='Open Linux Assistant')
         office_item.connect('activate', self._on_open_actions)
         menu.append(office_item)
         rest_item = Gtk.MenuItem(label='RestPose')
