@@ -547,7 +547,14 @@ class OfficeBubble(Gtk.Overlay):
         w = float(a.width) - self.body_margin * 2
         h = float(a.height) - self.tail_height - self.body_margin
         r = 5.0
-        tail_center = max(x + 30.0, min(x + w - 30.0, x + self.tail_offset))
+       # центр bubble
+        bubble_center = x + w / 2
+
+        # трохи зміщуємо вліво (бо персонаж під bubble трохи зліва)
+        tail_center = bubble_center - 40
+
+        # обмеження щоб не вилазив за межі
+        tail_center = max(x + 30.0, min(x + w - 30.0, tail_center))
         tail_left = tail_center - self.tail_width / 2.0
         tail_right = tail_center + self.tail_width / 2.0
         tail_tip_x = tail_center - 1.0
